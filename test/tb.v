@@ -1,3 +1,4 @@
+
 `default_nettype none
 `timescale 1ns / 1ps
 
@@ -6,11 +7,22 @@
 */
 module tb ();
 
+`ifndef SYNTHESIS
+  reg [(8*32)-1:0] DEBUG;
+  reg DEBUG_wire;
+`endif
+
   // Dump the signals to a VCD file. You can view it with gtkwave.
   initial begin
     $dumpfile("tb.vcd");
     $dumpvars(0, tb);
+`ifdef TIMING
     #1;
+`endif
+`ifndef SYNTHESIS
+    DEBUG = {8'h44, 8'h45, 8'h42, 8'h55, 8'h47, {27{8'h20}}}; // "DEBUG        "
+    DEBUG_wire = 0;
+`endif
   end
 
   // Wire up the inputs and outputs:
@@ -24,22 +36,24 @@ module tb ();
   wire [7:0] uio_oe;
 
   // Replace tt_um_example with your module name:
-  tt_um_example user_project (
-
+  tt_um_dlmiles_poc_fskmodem_hdlctrx dut (
       // Include power ports for the Gate Level test:
-`ifdef GL_TEST
-      .VPWR(1'b1),
-      .VGND(1'b0),
+`ifdef USE_POWER_PINS
+      .VPWR   (1'b1),     //i
+      .VGND   (1'b0),     //i
 `endif
-
-      .ui_in  (ui_in),    // Dedicated inputs
-      .uo_out (uo_out),   // Dedicated outputs
-      .uio_in (uio_in),   // IOs: Input path
-      .uio_out(uio_out),  // IOs: Output path
-      .uio_oe (uio_oe),   // IOs: Enable path (active high: 0=input, 1=output)
-      .ena    (ena),      // enable - goes high when design is selected
-      .clk    (clk),      // clock
-      .rst_n  (rst_n)     // not reset
+`ifdef USE_POWER_PINS_LEGACY
+      .vccd1  (1'b1),     //i
+      .vssd1  (1'b0),     //i
+`endif
+      .ui_in  (ui_in),    //i Dedicated inputs
+      .uo_out (uo_out),   //o Dedicated outputs
+      .uio_in (uio_in),   //i IOs: Input path
+      .uio_out(uio_out),  //o IOs: Output path
+      .uio_oe (uio_oe),   //o IOs: Enable path (active high: 0=input, 1=output)
+      .ena    (ena),      //i enable - goes high when design is selected
+      .clk    (clk),      //i clock
+      .rst_n  (rst_n)     //i not reset
   );
 
 endmodule
