@@ -288,7 +288,7 @@ module LayerControl (
 
   reg                 txErrorReg;
   reg                 rxErrorReg;
-  wire                when_ModemTop_l586;
+  wire                when_ModemTop_l596;
 
   always @(*) begin
     io_txerror = txErrorReg;
@@ -302,14 +302,14 @@ module LayerControl (
   always @(*) begin
     io_rxerror = rxErrorReg;
     if(!io_resetCondx) begin
-      if(when_ModemTop_l586) begin
+      if(when_ModemTop_l596) begin
         io_rxerror = 1'b1;
       end
     end
   end
 
   assign io_sending = io_hdlcTxActive;
-  assign when_ModemTop_l586 = (io_hdlcFrameError || io_hdlcCrcError);
+  assign when_ModemTop_l596 = (io_hdlcFrameError || io_hdlcCrcError);
   always @(posedge clk) begin
     if(!rst_n) begin
       txErrorReg <= 1'b0;
@@ -322,7 +322,7 @@ module LayerControl (
         if(io_hdlcUnderrun) begin
           txErrorReg <= 1'b1;
         end
-        if(when_ModemTop_l586) begin
+        if(when_ModemTop_l596) begin
           rxErrorReg <= 1'b1;
         end
       end
@@ -344,10 +344,7 @@ module UartControl (
 );
 
   wire                tx_io_valid;
-  wire                rx_io_ready;
-  wire       [7:0]    rxFifo_io_dataIn;
-  wire                rxFifo_io_dataInEn;
-  wire                rxFifo_io_dataOutEn;
+  reg                 rx_io_ready;
   wire       [7:0]    txFifo_io_dataOut;
   wire                txFifo_io_full;
   wire                txFifo_io_almostFull;
@@ -399,9 +396,9 @@ module UartControl (
     .rst_n         (rst_n             )  //i
   );
   UartFifo_1 rxFifo (
-    .io_dataIn      (rxFifo_io_dataIn[7:0] ), //i
-    .io_dataInEn    (rxFifo_io_dataInEn    ), //i
-    .io_dataOutEn   (rxFifo_io_dataOutEn   ), //i
+    .io_dataIn      (rx_io_payload[7:0]    ), //i
+    .io_dataInEn    (rx_io_valid           ), //i
+    .io_dataOutEn   (1'b0                  ), //i
     .io_dataOut     (rxFifo_io_dataOut[7:0]), //o
     .io_full        (rxFifo_io_full        ), //o
     .io_almostFull  (rxFifo_io_almostFull  ), //o
@@ -412,6 +409,13 @@ module UartControl (
     .rst_n          (rst_n                 )  //i
   );
   assign tx_io_valid = (! txFifo_io_empty);
+  always @(*) begin
+    rx_io_ready = 1'b0;
+    if(rx_io_valid) begin
+      rx_io_ready = 1'b1;
+    end
+  end
+
   assign io_uartCtsOut = txFifo_io_almostFull;
   assign io_uartTxOut = tx_io_uartTxOut;
 
@@ -465,7 +469,7 @@ module ModemControl (
   wire       [3:0]    _zz_txAddr12_5;
   wire       [7:0]    _zz_rxClockInternal;
   reg        [5:0]    tablePhase;
-  wire                when_ModemTop_l655;
+  wire                when_ModemTop_l665;
   wire                rxClockFixed;
   wire                _zz_rxClockFixedStb;
   reg                 _zz_rxClockFixedStb_regNext;
@@ -482,7 +486,7 @@ module ModemControl (
   reg        [7:0]    rxAddr8;
   wire       [11:0]   rxAddr;
   wire                rxClock;
-  wire                when_ModemTop_l709;
+  wire                when_ModemTop_l719;
   wire                txClockInternal;
   wire                _zz_txClockInternalRiseStb;
   reg                 _zz_txClockInternalRiseStb_regNext;
@@ -509,7 +513,7 @@ module ModemControl (
   reg                 zeroCrossDet_6;
   reg                 zeroCrossDet_7;
   wire                rxClockInternal;
-  wire                when_ModemTop_l823;
+  wire                when_ModemTop_l836;
 
   assign _zz_txAddr12 = {scrambler_1_io_vecOut_15,{scrambler_1_io_vecOut_14,{scrambler_1_io_vecOut_13,{scrambler_1_io_vecOut_12,{scrambler_1_io_vecOut_11,{scrambler_1_io_vecOut_10,{scrambler_1_io_vecOut_9,{scrambler_1_io_vecOut_8,{scrambler_1_io_vecOut_7,{scrambler_1_io_vecOut_6,{_zz_txAddr12_1,_zz_txAddr12_2}}}}}}}}}}};
   assign _zz_txAddr12_3 = {scrambler_1_io_vecOut_15,{scrambler_1_io_vecOut_14,{scrambler_1_io_vecOut_13,{scrambler_1_io_vecOut_12,{scrambler_1_io_vecOut_11,{scrambler_1_io_vecOut_10,{scrambler_1_io_vecOut_9,{scrambler_1_io_vecOut_8,{scrambler_1_io_vecOut_7,{scrambler_1_io_vecOut_6,{scrambler_1_io_vecOut_5,{_zz_txAddr12_4,_zz_txAddr12_5}}}}}}}}}}}};
@@ -542,7 +546,7 @@ module ModemControl (
     .rst_n        (rst_n                   ), //i
     .clk          (clk                     )  //i
   );
-  assign when_ModemTop_l655 = (! rst_n);
+  assign when_ModemTop_l665 = (! rst_n);
   assign rxClockFixed = tablePhase[1];
   assign _zz_rxClockFixedStb = tablePhase[1];
   assign rxClockFixedStb = (_zz_rxClockFixedStb && (! _zz_rxClockFixedStb_regNext));
@@ -577,7 +581,7 @@ module ModemControl (
   assign txClock3 = rxCtr[3];
   assign rxAddr = {rxAddr8,rxCtr};
   assign rxClock = rxCtr[2];
-  assign when_ModemTop_l709 = (! rst_n);
+  assign when_ModemTop_l719 = (! rst_n);
   assign txClockInternal = rxCtr[3];
   assign _zz_txClockInternalRiseStb = rxCtr[3];
   assign txClockInternalRiseStb = (_zz_txClockInternalRiseStb && (! _zz_txClockInternalRiseStb_regNext));
@@ -608,6 +612,8 @@ module ModemControl (
   end
 
   assign io_addr6 = table6;
+  assign io_txDac8 = txDac;
+  assign io_rxDac8 = rxRcrDac;
   assign phase = tablePhase[1 : 0];
   always @(*) begin
     case(io_cfgUpDownSource)
@@ -621,12 +627,12 @@ module ModemControl (
   end
 
   assign rxClockInternal = (_zz_rxClockInternal[7] ^ io_rxDataRawIn);
-  assign when_ModemTop_l823 = (! rst_n);
+  assign when_ModemTop_l836 = (! rst_n);
   assign io_txClockStb = txClockStb;
   assign io_rxClock = rxClock;
   assign io_upDownOut = updownSource;
   always @(posedge clk) begin
-    if(when_ModemTop_l655) begin
+    if(when_ModemTop_l665) begin
       tablePhase <= 6'h00;
     end else begin
       tablePhase <= (tablePhase - 6'h01);
@@ -634,7 +640,7 @@ module ModemControl (
     _zz_rxClockFixedStb_regNext <= _zz_rxClockFixedStb;
     _zz_txClockStb_regNext <= _zz_txClockStb;
     rxCtr <= (rxCtr + 4'b0001);
-    if(when_ModemTop_l709) begin
+    if(when_ModemTop_l719) begin
       rxCtr <= 4'b0000;
     end
     _zz_txClockInternalRiseStb_regNext <= _zz_txClockInternalRiseStb;
@@ -683,7 +689,7 @@ module ModemControl (
       zeroCrossDet_6 <= zeroCrossDet_5;
       zeroCrossDet_7 <= zeroCrossDet_6;
     end
-    if(when_ModemTop_l823) begin
+    if(when_ModemTop_l836) begin
       rxAddr8 <= 8'h00;
     end else begin
       if(rxClockInternal) begin
