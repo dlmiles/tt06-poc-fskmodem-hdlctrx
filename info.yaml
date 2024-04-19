@@ -8,7 +8,7 @@ project:
   clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
 
   # How many tiles your design occupies? A single tile is about 167x108 uM.
-  tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+  tiles: "1x2"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
 
   # Your top module name must start with "tt_um_". Make it unique by including your github username:
   top_module:  "tt_um_dlmiles_poc_fskmodem_hdlctrx"
@@ -22,7 +22,7 @@ project:
 pinout:
   # Inputs
   ui[0]: "Rx Data"
-  ui[1]: "Rx Clock" # duplicated UIO[0] ?
+  ui[1]: "Tx Data"
   ui[2]: "UART RTS"
   ui[3]: "TableData[0]"
   ui[4]: "TableData[1]"

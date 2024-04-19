@@ -25,13 +25,13 @@ module tt_um_dlmiles_poc_fskmodem_hdlctrx (
   // Configuration latch bit experiment (configuration?)
   reg [7:0] latched_rst_n_uio_in;
   always_latch begin
-    if (!rst_n)
+    if (!rst_n_sync)
       latched_rst_n_uio_in = uio_in;
   end
 
   reg [7:0] latched_rst_n_ui_in;
   always_latch begin
-    if (!rst_n)
+    if (!rst_n_sync)
       latched_rst_n_ui_in = ui_in;
   end
 
