@@ -27,6 +27,8 @@ module ModemTop (
   wire       [7:0]    control_io_rxDac8;
   wire                control_io_uartTxClock;
   wire                control_io_uartRxClock;
+  wire                uart_io_isSending;
+  wire                uart_io_txData;
   wire                uart_io_uartTxOut;
   wire                uart_io_uartCtsOut;
   wire                layer_io_txerror;
@@ -53,10 +55,11 @@ module ModemTop (
   wire       [1:0]    cfgTxBertMode;
   reg        [7:0]    oe;
   wire                rxDataIn;
-  wire                rxClockIn;
+  wire                txDataIn;
   wire                uartRtsIn;
   wire       [3:0]    rom4;
   wire                uartRxIn;
+  wire                rxClockIn;
   wire                upDownIn;
   wire       [5:0]    addr6In;
   wire                sim;
@@ -96,7 +99,7 @@ module ModemTop (
     .io_rom4              (rom4[3:0]             ), //i
     .io_upDownIn          (upDownIn              ), //i
     .io_rxClockIn         (rxClockIn             ), //i
-    .io_txDataIn          (uart_io_uartTxOut     ), //i
+    .io_txData            (uart_io_txData        ), //i
     .io_rxDataRawIn       (rxDataIn              ), //i
     .io_txClockStb        (control_io_txClockStb ), //o
     .io_addr6             (control_io_addr6[5:0] ), //o
@@ -110,14 +113,19 @@ module ModemTop (
     .clk                  (clk                   )  //i
   );
   UartControl uart (
-    .io_uartRxIn   (uartRxIn              ), //i
-    .io_uartRtsIn  (uartRtsIn             ), //i
-    .io_txClockStb (control_io_uartTxClock), //i
-    .io_rxClockStb (control_io_uartRxClock), //i
-    .io_uartTxOut  (uart_io_uartTxOut     ), //o
-    .io_uartCtsOut (uart_io_uartCtsOut    ), //o
-    .clk           (clk                   ), //i
-    .rst_n         (rst_n                 )  //i
+    .io_cfgTxData     (cfgTxData             ), //i
+    .io_cfgTxBertMode (cfgTxBertMode[1:0]    ), //i
+    .io_txDataIn      (txDataIn              ), //i
+    .io_isSending     (uart_io_isSending     ), //o
+    .io_txData        (uart_io_txData        ), //o
+    .io_uartRxIn      (uartRxIn              ), //i
+    .io_uartRtsIn     (uartRtsIn             ), //i
+    .io_txClockStb    (control_io_uartTxClock), //i
+    .io_rxClockStb    (control_io_uartRxClock), //i
+    .io_uartTxOut     (uart_io_uartTxOut     ), //o
+    .io_uartCtsOut    (uart_io_uartCtsOut    ), //o
+    .clk              (clk                   ), //i
+    .rst_n            (rst_n                 )  //i
   );
   LayerControl layer (
     .io_resetCondx     (layer_io_resetCondx), //i
@@ -177,7 +185,7 @@ module ModemTop (
     uo_out[2] = fakeDcd;
     uo_out[3] = layer_io_rxerror;
     uo_out[4] = layer_io_txerror;
-    uo_out[5] = layer_io_sending;
+    uo_out[5] = uart_io_isSending;
     uo_out[6] = 1'b0;
     uo_out[7] = control_io_txClockStb;
   end
@@ -212,10 +220,11 @@ module ModemTop (
 
   assign uio_oe = oe;
   assign rxDataIn = ui_in[0];
-  assign rxClockIn = ui_in[1];
+  assign txDataIn = ui_in[1];
   assign uartRtsIn = ui_in[2];
   assign rom4 = ui_in[6 : 3];
   assign uartRxIn = ui_in[7];
+  assign rxClockIn = uio_in[0];
   assign upDownIn = uio_in[1];
   assign addr6In = uio_in[7 : 2];
   assign sim = 1'b1;
@@ -288,7 +297,7 @@ module LayerControl (
 
   reg                 txErrorReg;
   reg                 rxErrorReg;
-  wire                when_ModemTop_l946;
+  wire                when_ModemTop_l980;
 
   always @(*) begin
     io_txerror = txErrorReg;
@@ -302,14 +311,14 @@ module LayerControl (
   always @(*) begin
     io_rxerror = rxErrorReg;
     if(!io_resetCondx) begin
-      if(when_ModemTop_l946) begin
+      if(when_ModemTop_l980) begin
         io_rxerror = 1'b1;
       end
     end
   end
 
   assign io_sending = io_hdlcTxActive;
-  assign when_ModemTop_l946 = (io_hdlcFrameError || io_hdlcCrcError);
+  assign when_ModemTop_l980 = (io_hdlcFrameError || io_hdlcCrcError);
   always @(posedge clk) begin
     if(!rst_n) begin
       txErrorReg <= 1'b0;
@@ -322,7 +331,7 @@ module LayerControl (
         if(io_hdlcUnderrun) begin
           txErrorReg <= 1'b1;
         end
-        if(when_ModemTop_l946) begin
+        if(when_ModemTop_l980) begin
           rxErrorReg <= 1'b1;
         end
       end
@@ -333,6 +342,11 @@ module LayerControl (
 endmodule
 
 module UartControl (
+  input               io_cfgTxData,
+  input      [1:0]    io_cfgTxBertMode,
+  input               io_txDataIn,
+  output              io_isSending,
+  output              io_txData,
   input               io_uartRxIn,
   input               io_uartRtsIn,
   input               io_txClockStb,
@@ -346,7 +360,7 @@ module UartControl (
   wire                tx_io_valid;
   reg                 rxUart_io_ready;
   reg                 rxFifo_io_dataOutEn;
-  reg                 txCommandDecoder_io_txReady;
+  wire                txHdlc_io_wantFrameEnd;
   wire       [7:0]    txFifo_io_dataOut;
   wire                txFifo_io_full;
   wire                txFifo_io_almostFull;
@@ -374,9 +388,16 @@ module UartControl (
   wire                txCommandDecoder_io_txValid;
   wire                txCommandDecoder_io_wantTx;
   wire                txCommandDecoder_io_wantAbort;
+  wire                txHdlc_io_ready;
+  wire                txHdlc_io_txDataOut;
+  wire                txHdlc_io_isSending;
+  wire                txHdlc_io_underrunError;
   wire                rxFifoValid;
   reg                 uart_txPacketUpper_io_ready_regNext;
-  wire                when_ModemTop_l880;
+  wire                when_ModemTop_l891;
+  reg                 uart_txCommandDecoder_io_wantTx_regNext;
+  reg                 txDataSource;
+  reg                 txData;
 
   UartFifo txFifo (
     .io_dataIn      (8'h00                 ), //i
@@ -439,13 +460,27 @@ module UartControl (
     .io_valid         (txPacketUpper_io_txValid          ), //i
     .io_payload       (txPacketUpper_io_txPayload[7:0]   ), //i
     .io_ready         (txCommandDecoder_io_ready         ), //o
-    .io_txReady       (txCommandDecoder_io_txReady       ), //i
+    .io_txReady       (txHdlc_io_ready                   ), //i
     .io_txPayload     (txCommandDecoder_io_txPayload[7:0]), //o
     .io_txValid       (txCommandDecoder_io_txValid       ), //o
     .io_upperError    (txPacketUpper_io_raiseError       ), //i
     .io_upperFrameEnd (txPacketUpper_io_frameEnd         ), //i
     .io_wantTx        (txCommandDecoder_io_wantTx        ), //o
     .io_wantAbort     (txCommandDecoder_io_wantAbort     ), //o
+    .clk              (clk                               ), //i
+    .rst_n            (rst_n                             )  //i
+  );
+  HdlcTx txHdlc (
+    .io_payload       (txCommandDecoder_io_txPayload[7:0]), //i
+    .io_valid         (txCommandDecoder_io_txValid       ), //i
+    .io_ready         (txHdlc_io_ready                   ), //o
+    .io_txClockStb    (io_txClockStb                     ), //i
+    .io_wantAbort     (txCommandDecoder_io_wantAbort     ), //i
+    .io_wantFrameEnd  (txHdlc_io_wantFrameEnd            ), //i
+    .io_wantTx        (txCommandDecoder_io_wantTx        ), //i
+    .io_txDataOut     (txHdlc_io_txDataOut               ), //o
+    .io_isSending     (txHdlc_io_isSending               ), //o
+    .io_underrunError (txHdlc_io_underrunError           ), //o
     .clk              (clk                               ), //i
     .rst_n            (rst_n                             )  //i
   );
@@ -458,26 +493,51 @@ module UartControl (
   end
 
   assign rxFifoValid = (! rxFifo_io_empty);
-  assign when_ModemTop_l880 = (txPacketUpper_io_ready && (! uart_txPacketUpper_io_ready_regNext));
+  assign when_ModemTop_l891 = (txPacketUpper_io_ready && (! uart_txPacketUpper_io_ready_regNext));
   always @(*) begin
-    if(when_ModemTop_l880) begin
+    if(when_ModemTop_l891) begin
       rxFifo_io_dataOutEn = 1'b1;
     end else begin
       rxFifo_io_dataOutEn = 1'b0;
     end
   end
 
+  assign txHdlc_io_wantFrameEnd = ((! txCommandDecoder_io_wantTx) && uart_txCommandDecoder_io_wantTx_regNext);
   always @(*) begin
-    txCommandDecoder_io_txReady = 1'b0;
-    if(txCommandDecoder_io_txValid) begin
-      txCommandDecoder_io_txReady = 1'b1;
-    end
+    case(io_cfgTxData)
+      1'b0 : begin
+        txDataSource = txHdlc_io_txDataOut;
+      end
+      default : begin
+        txDataSource = io_txDataIn;
+      end
+    endcase
   end
 
+  always @(*) begin
+    case(io_cfgTxBertMode)
+      2'b00 : begin
+        txData = txDataSource;
+      end
+      2'b01 : begin
+        txData = (! txDataSource);
+      end
+      2'b10 : begin
+        txData = 1'b0;
+      end
+      default : begin
+        txData = 1'b1;
+      end
+    endcase
+  end
+
+  assign io_isSending = txHdlc_io_isSending;
+  assign io_txData = txData;
   assign io_uartCtsOut = rxFifo_io_almostFull;
   assign io_uartTxOut = tx_io_uartTxOut;
   always @(posedge clk) begin
     uart_txPacketUpper_io_ready_regNext <= txPacketUpper_io_ready;
+    uart_txCommandDecoder_io_wantTx_regNext <= txCommandDecoder_io_wantTx;
   end
 
 
@@ -492,7 +552,7 @@ module ModemControl (
   input      [3:0]    io_rom4,
   input               io_upDownIn,
   input               io_rxClockIn,
-  input               io_txDataIn,
+  input               io_txData,
   input               io_rxDataRawIn,
   output              io_txClockStb,
   output     [5:0]    io_addr6,
@@ -531,7 +591,7 @@ module ModemControl (
   wire       [3:0]    _zz_txAddr12_5;
   wire       [7:0]    _zz_rxClockInternal;
   reg        [5:0]    tablePhase;
-  wire                when_ModemTop_l1015;
+  wire                when_ModemTop_l1050;
   wire                rxClockFixed;
   wire                _zz_rxClockFixedStb;
   reg                 _zz_rxClockFixedStb_regNext;
@@ -556,7 +616,7 @@ module ModemControl (
   reg        [7:0]    rxAddr8;
   wire       [11:0]   rxAddr;
   wire                rxClock;
-  wire                when_ModemTop_l1069;
+  wire                when_ModemTop_l1104;
   wire                txClockInternal;
   wire                _zz_txClockInternalRiseStb;
   reg                 _zz_txClockInternalRiseStb_regNext;
@@ -583,7 +643,7 @@ module ModemControl (
   reg                 zeroCrossDet_6;
   reg                 zeroCrossDet_7;
   wire                rxClockInternal;
-  wire                when_ModemTop_l1186;
+  wire                when_ModemTop_l1221;
 
   assign _zz_txAddr12 = {scrambler_1_io_vecOut_15,{scrambler_1_io_vecOut_14,{scrambler_1_io_vecOut_13,{scrambler_1_io_vecOut_12,{scrambler_1_io_vecOut_11,{scrambler_1_io_vecOut_10,{scrambler_1_io_vecOut_9,{scrambler_1_io_vecOut_8,{scrambler_1_io_vecOut_7,{scrambler_1_io_vecOut_6,{_zz_txAddr12_1,_zz_txAddr12_2}}}}}}}}}}};
   assign _zz_txAddr12_3 = {scrambler_1_io_vecOut_15,{scrambler_1_io_vecOut_14,{scrambler_1_io_vecOut_13,{scrambler_1_io_vecOut_12,{scrambler_1_io_vecOut_11,{scrambler_1_io_vecOut_10,{scrambler_1_io_vecOut_9,{scrambler_1_io_vecOut_8,{scrambler_1_io_vecOut_7,{scrambler_1_io_vecOut_6,{scrambler_1_io_vecOut_5,{_zz_txAddr12_4,_zz_txAddr12_5}}}}}}}}}}}};
@@ -616,7 +676,7 @@ module ModemControl (
     .rst_n        (rst_n                   ), //i
     .clk          (clk                     )  //i
   );
-  assign when_ModemTop_l1015 = (! rst_n);
+  assign when_ModemTop_l1050 = (! rst_n);
   assign rxClockFixed = tablePhase[1];
   assign _zz_rxClockFixedStb = tablePhase[1];
   assign rxClockFixedStb = (_zz_rxClockFixedStb && (! _zz_rxClockFixedStb_regNext));
@@ -655,7 +715,7 @@ module ModemControl (
   assign txClock3 = rxCtr[3];
   assign rxAddr = {rxAddr8,rxCtr};
   assign rxClock = rxCtr[2];
-  assign when_ModemTop_l1069 = (! rst_n);
+  assign when_ModemTop_l1104 = (! rst_n);
   assign txClockInternal = rxCtr[3];
   assign _zz_txClockInternalRiseStb = rxCtr[3];
   assign txClockInternalRiseStb = (_zz_txClockInternalRiseStb && (! _zz_txClockInternalRiseStb_regNext));
@@ -701,12 +761,12 @@ module ModemControl (
   end
 
   assign rxClockInternal = (_zz_rxClockInternal[7] ^ io_rxDataRawIn);
-  assign when_ModemTop_l1186 = (! rst_n);
+  assign when_ModemTop_l1221 = (! rst_n);
   assign io_txClockStb = txClockStb;
   assign io_rxClock = rxClock;
   assign io_upDownOut = updownSource;
   always @(posedge clk) begin
-    if(when_ModemTop_l1015) begin
+    if(when_ModemTop_l1050) begin
       tablePhase <= 6'h00;
     end else begin
       tablePhase <= (tablePhase - 6'h01);
@@ -718,13 +778,13 @@ module ModemControl (
     _zz__2_regNext <= _zz__2;
     _zz__3_regNext <= _zz__3;
     rxCtr <= (rxCtr + 4'b0001);
-    if(when_ModemTop_l1069) begin
+    if(when_ModemTop_l1104) begin
       rxCtr <= 4'b0000;
     end
     _zz_txClockInternalRiseStb_regNext <= _zz_txClockInternalRiseStb;
     _zz_txClockInternalFallStb_regNext <= _zz_txClockInternalFallStb;
     if(txClockInternalRiseStb) begin
-      txDataAfterReg <= io_txDataIn;
+      txDataAfterReg <= io_txData;
     end
     if(io_cfgTableLatency) begin
       case(phase)
@@ -767,7 +827,7 @@ module ModemControl (
       zeroCrossDet_6 <= zeroCrossDet_5;
       zeroCrossDet_7 <= zeroCrossDet_6;
     end
-    if(when_ModemTop_l1186) begin
+    if(when_ModemTop_l1221) begin
       rxAddr8 <= 8'h00;
     end else begin
       if(rxClockInternal) begin
@@ -778,6 +838,244 @@ module ModemControl (
         end
       end
     end
+  end
+
+
+endmodule
+
+module HdlcTx (
+  input      [7:0]    io_payload,
+  input               io_valid,
+  output reg          io_ready,
+  input               io_txClockStb,
+  input               io_wantAbort,
+  input               io_wantFrameEnd,
+  input               io_wantTx,
+  output reg          io_txDataOut,
+  output              io_isSending,
+  output reg          io_underrunError,
+  input               clk,
+  input               rst_n
+);
+
+  wire       [0:0]    txCrc_io_data;
+  reg                 txCrc_io_enable;
+  reg                 txCrc_io_init;
+  wire       [15:0]   txCrc_io_crc;
+  wire                txCrc_io_crcError;
+  reg        [3:0]    bit_1;
+  reg        [2:0]    bitstuffCnt;
+  reg                 isSending;
+  reg                 isAbort;
+  reg                 isCRC;
+  wire       [6:0]    SYNC;
+  wire       [15:0]   ABORT;
+  reg                 io_valid_regNext;
+  wire                when_ModemTop_l332;
+  wire                when_ModemTop_l335;
+  wire                when_ModemTop_l344;
+  wire                when_ModemTop_l358;
+  wire                when_ModemTop_l368;
+  wire                when_ModemTop_l373;
+  wire                when_ModemTop_l380;
+  wire                when_ModemTop_l402;
+
+  CRC16_CCITT txCrc (
+    .io_data     (txCrc_io_data     ), //i
+    .io_enable   (txCrc_io_enable   ), //i
+    .io_init     (txCrc_io_init     ), //i
+    .io_crc      (txCrc_io_crc[15:0]), //o
+    .io_crcError (txCrc_io_crcError ), //o
+    .clk         (clk               ), //i
+    .rst_n       (rst_n             )  //i
+  );
+  always @(*) begin
+    io_txDataOut = 1'b0;
+    if(isAbort) begin
+      if(when_ModemTop_l344) begin
+        io_txDataOut = ABORT[bit_1];
+      end else begin
+        io_txDataOut = ABORT[bit_1];
+      end
+    end else begin
+      if(isCRC) begin
+        if(when_ModemTop_l358) begin
+          io_txDataOut = ABORT[bit_1];
+        end else begin
+          if(isSending) begin
+            if(io_valid) begin
+              if(when_ModemTop_l368) begin
+                io_txDataOut = 1'b0;
+              end else begin
+                io_txDataOut = io_payload[bit_1[2 : 0]];
+              end
+            end
+          end else begin
+            io_txDataOut = ABORT[bit_1];
+          end
+        end
+      end else begin
+        if(when_ModemTop_l402) begin
+          io_txDataOut = SYNC[bit_1[2 : 0]];
+        end else begin
+          io_txDataOut = SYNC[bit_1[2 : 0]];
+        end
+      end
+    end
+  end
+
+  always @(*) begin
+    io_underrunError = 1'b0;
+    if(!isAbort) begin
+      if(isCRC) begin
+        if(!when_ModemTop_l358) begin
+          if(isSending) begin
+            if(!io_valid) begin
+              if(!io_wantFrameEnd) begin
+                io_underrunError = 1'b1;
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  always @(*) begin
+    io_ready = 1'b0;
+    if(!isAbort) begin
+      if(isCRC) begin
+        if(!when_ModemTop_l358) begin
+          if(isSending) begin
+            if(io_valid) begin
+              if(when_ModemTop_l380) begin
+                io_ready = 1'b1;
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  always @(*) begin
+    txCrc_io_enable = 1'b0;
+    if(when_ModemTop_l332) begin
+      txCrc_io_enable = 1'b1;
+    end
+  end
+
+  always @(*) begin
+    txCrc_io_init = 1'b0;
+    if(isAbort) begin
+      if(when_ModemTop_l344) begin
+        if(io_valid) begin
+          txCrc_io_init = 1'b1;
+        end
+      end
+    end else begin
+      if(isCRC) begin
+        if(when_ModemTop_l358) begin
+          if(io_valid) begin
+            txCrc_io_init = 1'b1;
+          end
+        end
+      end else begin
+        if(when_ModemTop_l402) begin
+          if(io_valid) begin
+            txCrc_io_init = 1'b1;
+          end
+        end
+      end
+    end
+  end
+
+  assign SYNC = 7'h3f;
+  assign ABORT = 16'hfffe;
+  assign when_ModemTop_l332 = (isSending && (io_valid && (! io_valid_regNext)));
+  assign when_ModemTop_l335 = (isSending && io_wantAbort);
+  assign when_ModemTop_l344 = (bit_1 == 4'b1111);
+  assign when_ModemTop_l358 = (bit_1 == 4'b1111);
+  assign when_ModemTop_l368 = ((bitstuffCnt == 3'b101) && io_payload[bit_1[2 : 0]]);
+  assign when_ModemTop_l373 = io_payload[bit_1[2 : 0]];
+  assign when_ModemTop_l380 = (bit_1 == 4'b0111);
+  assign when_ModemTop_l402 = (bit_1 == 4'b0110);
+  assign io_isSending = isSending;
+  always @(posedge clk) begin
+    if(!rst_n) begin
+      bit_1 <= 4'b0000;
+      bitstuffCnt <= 3'b000;
+      isSending <= 1'b0;
+      isAbort <= 1'b0;
+      isCRC <= 1'b0;
+    end else begin
+      if(when_ModemTop_l335) begin
+        isSending <= 1'b0;
+        isAbort <= 1'b1;
+        bit_1 <= 4'b0000;
+      end
+      if(isAbort) begin
+        if(when_ModemTop_l344) begin
+          bit_1 <= 4'b0000;
+          isAbort <= 1'b0;
+          if(io_valid) begin
+            isSending <= 1'b1;
+          end
+        end else begin
+          bit_1 <= (bit_1 + 4'b0001);
+        end
+      end else begin
+        if(isCRC) begin
+          if(when_ModemTop_l358) begin
+            bit_1 <= 4'b0000;
+            isAbort <= 1'b0;
+            if(io_valid) begin
+              isSending <= 1'b1;
+            end
+          end else begin
+            if(isSending) begin
+              if(io_valid) begin
+                if(when_ModemTop_l368) begin
+                  bitstuffCnt <= 3'b000;
+                end else begin
+                  if(when_ModemTop_l373) begin
+                    bitstuffCnt <= (bitstuffCnt + 3'b001);
+                  end else begin
+                    bitstuffCnt <= 3'b000;
+                  end
+                  bit_1 <= (bit_1 + 4'b0001);
+                end
+              end else begin
+                if(io_wantFrameEnd) begin
+                  isSending <= 1'b0;
+                  isCRC <= 1'b1;
+                  bit_1 <= 4'b0000;
+                end else begin
+                  isAbort <= 1'b1;
+                  isSending <= 1'b0;
+                  bit_1 <= 4'b0000;
+                end
+              end
+            end else begin
+              bit_1 <= (bit_1 + 4'b0001);
+            end
+          end
+        end else begin
+          if(when_ModemTop_l402) begin
+            bit_1 <= 4'b0000;
+            if(io_valid) begin
+              isSending <= 1'b1;
+            end
+          end else begin
+            bit_1 <= (bit_1 + 4'b0001);
+          end
+        end
+      end
+    end
+  end
+
+  always @(posedge clk) begin
+    io_valid_regNext <= io_valid;
   end
 
 
@@ -807,10 +1105,10 @@ module CommandDecoder (
   wire                fsmCmdDecoder_wantExit;
   reg                 fsmCmdDecoder_wantStart;
   wire                fsmCmdDecoder_wantKill;
-  wire                when_ModemTop_l711;
+  wire                when_ModemTop_l715;
   reg        [1:0]    fsmCmdDecoder_stateReg;
   reg        [1:0]    fsmCmdDecoder_stateNext;
-  wire                when_ModemTop_l682;
+  wire                when_ModemTop_l686;
   `ifndef SYNTHESIS
   reg [55:0] fsmCmdDecoder_stateReg_string;
   reg [55:0] fsmCmdDecoder_stateNext_string;
@@ -879,7 +1177,7 @@ module CommandDecoder (
 
   always @(*) begin
     io_wantAbort = wantAbort;
-    if(when_ModemTop_l711) begin
+    if(when_ModemTop_l715) begin
       io_wantAbort = 1'b1;
     end
   end
@@ -902,13 +1200,13 @@ module CommandDecoder (
   end
 
   assign fsmCmdDecoder_wantKill = 1'b0;
-  assign when_ModemTop_l711 = (io_upperError || wantAbort);
+  assign when_ModemTop_l715 = (io_upperError || wantAbort);
   always @(*) begin
     fsmCmdDecoder_stateNext = fsmCmdDecoder_stateReg;
     case(fsmCmdDecoder_stateReg)
       fsmCmdDecoder_enumDef_IDLE : begin
         if(io_valid) begin
-          if(when_ModemTop_l682) begin
+          if(when_ModemTop_l686) begin
             fsmCmdDecoder_stateNext = fsmCmdDecoder_enumDef_CONTROL;
           end else begin
             fsmCmdDecoder_stateNext = fsmCmdDecoder_enumDef_DATA;
@@ -936,14 +1234,14 @@ module CommandDecoder (
     end
   end
 
-  assign when_ModemTop_l682 = (io_payload == 8'h80);
+  assign when_ModemTop_l686 = (io_payload == 8'h80);
   always @(posedge clk) begin
     if(!rst_n) begin
       wantAbort <= 1'b0;
       wantTx <= 1'b0;
       fsmCmdDecoder_stateReg <= fsmCmdDecoder_enumDef_BOOT;
     end else begin
-      if(when_ModemTop_l711) begin
+      if(when_ModemTop_l715) begin
         wantAbort <= 1'b0;
       end
       fsmCmdDecoder_stateReg <= fsmCmdDecoder_stateNext;
@@ -990,17 +1288,17 @@ module KissDecoder (
   wire                fsmKissDecoder_wantExit;
   reg                 fsmKissDecoder_wantStart;
   wire                fsmKissDecoder_wantKill;
-  wire                when_ModemTop_l821;
+  wire                when_ModemTop_l825;
   reg        [2:0]    fsmKissDecoder_stateReg;
   reg        [2:0]    fsmKissDecoder_stateNext;
-  wire                when_ModemTop_l759;
-  wire                when_ModemTop_l766;
+  wire                when_ModemTop_l763;
   wire                when_ModemTop_l770;
-  wire                when_ModemTop_l781;
-  wire                when_ModemTop_l788;
+  wire                when_ModemTop_l774;
+  wire                when_ModemTop_l785;
   wire                when_ModemTop_l792;
-  wire                when_ModemTop_l814;
-  wire                when_ModemTop_l807;
+  wire                when_ModemTop_l796;
+  wire                when_ModemTop_l818;
+  wire                when_ModemTop_l811;
   `ifndef SYNTHESIS
   reg [63:0] fsmKissDecoder_stateReg_string;
   reg [63:0] fsmKissDecoder_stateNext_string;
@@ -1038,35 +1336,35 @@ module KissDecoder (
     io_ready = 1'b0;
     case(fsmKissDecoder_stateReg)
       fsmKissDecoder_enumDef_HUNT : begin
-        if(when_ModemTop_l759) begin
+        if(when_ModemTop_l763) begin
           io_ready = 1'b1;
         end
       end
       fsmKissDecoder_enumDef_DATAFEND : begin
         if(io_valid) begin
-          if(when_ModemTop_l766) begin
+          if(when_ModemTop_l770) begin
             io_ready = 1'b1;
           end else begin
-            if(when_ModemTop_l770) begin
+            if(when_ModemTop_l774) begin
               io_ready = 1'b1;
             end
           end
         end
       end
       fsmKissDecoder_enumDef_SEND : begin
-        if(when_ModemTop_l781) begin
+        if(when_ModemTop_l785) begin
           io_ready = 1'b1;
         end
       end
       fsmKissDecoder_enumDef_DATAFESC : begin
       end
       fsmKissDecoder_enumDef_SENDFEND : begin
-        if(when_ModemTop_l814) begin
+        if(when_ModemTop_l818) begin
           io_ready = 1'b1;
         end
       end
       fsmKissDecoder_enumDef_SENDFESC : begin
-        if(when_ModemTop_l807) begin
+        if(when_ModemTop_l811) begin
           io_ready = 1'b1;
         end
       end
@@ -1086,8 +1384,8 @@ module KissDecoder (
       end
       fsmKissDecoder_enumDef_DATAFESC : begin
         if(io_valid) begin
-          if(!when_ModemTop_l788) begin
-            if(!when_ModemTop_l792) begin
+          if(!when_ModemTop_l792) begin
+            if(!when_ModemTop_l796) begin
               io_raiseError = 1'b1;
             end
           end
@@ -1109,7 +1407,7 @@ module KissDecoder (
       end
       fsmKissDecoder_enumDef_DATAFEND : begin
         if(io_valid) begin
-          if(when_ModemTop_l766) begin
+          if(when_ModemTop_l770) begin
             io_frameEnd = 1'b1;
           end
         end
@@ -1138,10 +1436,10 @@ module KissDecoder (
       end
       fsmKissDecoder_enumDef_DATAFESC : begin
         if(io_valid) begin
-          if(when_ModemTop_l788) begin
+          if(when_ModemTop_l792) begin
             io_txPayload = 8'hdb;
           end else begin
-            if(when_ModemTop_l792) begin
+            if(when_ModemTop_l796) begin
               io_txPayload = 8'hc0;
             end
           end
@@ -1181,20 +1479,20 @@ module KissDecoder (
   end
 
   assign fsmKissDecoder_wantKill = 1'b0;
-  assign when_ModemTop_l821 = (txValid && io_txReady);
+  assign when_ModemTop_l825 = (txValid && io_txReady);
   assign io_txValid = txValid;
   always @(*) begin
     fsmKissDecoder_stateNext = fsmKissDecoder_stateReg;
     case(fsmKissDecoder_stateReg)
       fsmKissDecoder_enumDef_HUNT : begin
-        if(when_ModemTop_l759) begin
+        if(when_ModemTop_l763) begin
           fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_DATAFEND;
         end
       end
       fsmKissDecoder_enumDef_DATAFEND : begin
         if(io_valid) begin
-          if(!when_ModemTop_l766) begin
-            if(when_ModemTop_l770) begin
+          if(!when_ModemTop_l770) begin
+            if(when_ModemTop_l774) begin
               fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_DATAFESC;
             end else begin
               fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_SEND;
@@ -1203,16 +1501,16 @@ module KissDecoder (
         end
       end
       fsmKissDecoder_enumDef_SEND : begin
-        if(when_ModemTop_l781) begin
+        if(when_ModemTop_l785) begin
           fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_DATAFEND;
         end
       end
       fsmKissDecoder_enumDef_DATAFESC : begin
         if(io_valid) begin
-          if(when_ModemTop_l788) begin
+          if(when_ModemTop_l792) begin
             fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_SENDFESC;
           end else begin
-            if(when_ModemTop_l792) begin
+            if(when_ModemTop_l796) begin
               fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_SENDFEND;
             end else begin
               fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_HUNT;
@@ -1221,12 +1519,12 @@ module KissDecoder (
         end
       end
       fsmKissDecoder_enumDef_SENDFEND : begin
-        if(when_ModemTop_l814) begin
+        if(when_ModemTop_l818) begin
           fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_DATAFEND;
         end
       end
       fsmKissDecoder_enumDef_SENDFESC : begin
-        if(when_ModemTop_l807) begin
+        if(when_ModemTop_l811) begin
           fsmKissDecoder_stateNext = fsmKissDecoder_enumDef_DATAFEND;
         end
       end
@@ -1241,20 +1539,20 @@ module KissDecoder (
     end
   end
 
-  assign when_ModemTop_l759 = (io_valid && (io_payload == 8'hc0));
-  assign when_ModemTop_l766 = (io_payload == 8'hc0);
-  assign when_ModemTop_l770 = (io_payload == 8'hdb);
-  assign when_ModemTop_l781 = (io_txReady || (txValid == 1'b0));
-  assign when_ModemTop_l788 = (io_payload == 8'hdd);
-  assign when_ModemTop_l792 = (io_payload == 8'hdc);
-  assign when_ModemTop_l814 = (io_txReady || (txValid == 1'b0));
-  assign when_ModemTop_l807 = (io_txReady || (txValid == 1'b0));
+  assign when_ModemTop_l763 = (io_valid && (io_payload == 8'hc0));
+  assign when_ModemTop_l770 = (io_payload == 8'hc0);
+  assign when_ModemTop_l774 = (io_payload == 8'hdb);
+  assign when_ModemTop_l785 = (io_txReady || (txValid == 1'b0));
+  assign when_ModemTop_l792 = (io_payload == 8'hdd);
+  assign when_ModemTop_l796 = (io_payload == 8'hdc);
+  assign when_ModemTop_l818 = (io_txReady || (txValid == 1'b0));
+  assign when_ModemTop_l811 = (io_txReady || (txValid == 1'b0));
   always @(posedge clk) begin
     if(!rst_n) begin
       txValid <= 1'b0;
       fsmKissDecoder_stateReg <= fsmKissDecoder_enumDef_BOOT;
     end else begin
-      if(when_ModemTop_l821) begin
+      if(when_ModemTop_l825) begin
         txValid <= 1'b0;
       end
       fsmKissDecoder_stateReg <= fsmKissDecoder_stateNext;
@@ -1263,8 +1561,8 @@ module KissDecoder (
         end
         fsmKissDecoder_enumDef_DATAFEND : begin
           if(io_valid) begin
-            if(!when_ModemTop_l766) begin
-              if(!when_ModemTop_l770) begin
+            if(!when_ModemTop_l770) begin
+              if(!when_ModemTop_l774) begin
                 txValid <= 1'b1;
               end
             end
@@ -1274,10 +1572,10 @@ module KissDecoder (
         end
         fsmKissDecoder_enumDef_DATAFESC : begin
           if(io_valid) begin
-            if(when_ModemTop_l788) begin
+            if(when_ModemTop_l792) begin
               txValid <= 1'b1;
             end else begin
-              if(when_ModemTop_l792) begin
+              if(when_ModemTop_l796) begin
                 txValid <= 1'b1;
               end
             end
@@ -1322,7 +1620,7 @@ module UartFifo_1 (
   reg        [2:0]    nextOut;
   reg        [2:0]    nextIn;
   reg        [3:0]    count;
-  wire                when_ModemTop_l445;
+  wire                when_ModemTop_l449;
   wire       [7:0]    _zz_1;
 
   always @(*) begin
@@ -1338,7 +1636,7 @@ module UartFifo_1 (
     endcase
   end
 
-  assign when_ModemTop_l445 = (io_dataInEn && io_dataOutEn);
+  assign when_ModemTop_l449 = (io_dataInEn && io_dataOutEn);
   assign _zz_1 = ({7'd0,1'b1} <<< nextIn);
   assign io_dataOut = _zz_io_dataOut;
   assign io_full = (count == 4'b1000);
@@ -1352,7 +1650,7 @@ module UartFifo_1 (
       nextIn <= 3'b000;
       count <= 4'b0000;
     end else begin
-      if(!when_ModemTop_l445) begin
+      if(!when_ModemTop_l449) begin
         if(io_dataInEn) begin
           count <= (count + 4'b0001);
         end else begin
@@ -1475,14 +1773,14 @@ module UartRx (
   wire                fsmUartRx_wantExit;
   reg                 fsmUartRx_wantStart;
   wire                fsmUartRx_wantKill;
-  wire                when_ModemTop_l638;
+  wire                when_ModemTop_l642;
   reg        [2:0]    fsmUartRx_stateReg;
   reg        [2:0]    fsmUartRx_stateNext;
-  wire                when_ModemTop_l589;
-  wire                when_ModemTop_l595;
-  wire                when_ModemTop_l606;
-  wire                when_ModemTop_l617;
-  wire                when_ModemTop_l626;
+  wire                when_ModemTop_l593;
+  wire                when_ModemTop_l599;
+  wire                when_ModemTop_l610;
+  wire                when_ModemTop_l621;
+  wire                when_ModemTop_l630;
   `ifndef SYNTHESIS
   reg [39:0] fsmUartRx_stateReg_string;
   reg [39:0] fsmUartRx_stateNext_string;
@@ -1621,17 +1919,17 @@ module UartRx (
   end
 
   assign fsmUartRx_wantKill = 1'b0;
-  assign when_ModemTop_l638 = (io_valid && io_ready);
+  assign when_ModemTop_l642 = (io_valid && io_ready);
   always @(*) begin
     fsmUartRx_stateNext = fsmUartRx_stateReg;
     case(fsmUartRx_stateReg)
       fsmUartRx_enumDef_DISC : begin
-        if(when_ModemTop_l589) begin
+        if(when_ModemTop_l593) begin
           fsmUartRx_stateNext = fsmUartRx_enumDef_IDLE;
         end
       end
       fsmUartRx_enumDef_IDLE : begin
-        if(when_ModemTop_l595) begin
+        if(when_ModemTop_l599) begin
           fsmUartRx_stateNext = fsmUartRx_enumDef_START;
         end
       end
@@ -1640,7 +1938,7 @@ module UartRx (
           if(io_valid) begin
             fsmUartRx_stateNext = fsmUartRx_enumDef_IDLE;
           end else begin
-            if(when_ModemTop_l606) begin
+            if(when_ModemTop_l610) begin
               fsmUartRx_stateNext = fsmUartRx_enumDef_DATA;
             end else begin
               fsmUartRx_stateNext = fsmUartRx_enumDef_IDLE;
@@ -1650,14 +1948,14 @@ module UartRx (
       end
       fsmUartRx_enumDef_DATA : begin
         if(sampleTimer_tick) begin
-          if(when_ModemTop_l617) begin
+          if(when_ModemTop_l621) begin
             fsmUartRx_stateNext = fsmUartRx_enumDef_STOP;
           end
         end
       end
       fsmUartRx_enumDef_STOP : begin
         if(sampleTimer_tick) begin
-          if(when_ModemTop_l626) begin
+          if(when_ModemTop_l630) begin
             fsmUartRx_stateNext = fsmUartRx_enumDef_IDLE;
           end else begin
             fsmUartRx_stateNext = fsmUartRx_enumDef_DISC;
@@ -1675,17 +1973,17 @@ module UartRx (
     end
   end
 
-  assign when_ModemTop_l589 = (io_rxClockStb && (sampleValue == MARK));
-  assign when_ModemTop_l595 = (io_rxClockStb && (sampleValue == SPACE));
-  assign when_ModemTop_l606 = (sampleValue == SPACE);
-  assign when_ModemTop_l617 = (bitId == 3'b111);
-  assign when_ModemTop_l626 = (sampleValue == MARK);
+  assign when_ModemTop_l593 = (io_rxClockStb && (sampleValue == MARK));
+  assign when_ModemTop_l599 = (io_rxClockStb && (sampleValue == SPACE));
+  assign when_ModemTop_l610 = (sampleValue == SPACE);
+  assign when_ModemTop_l621 = (bitId == 3'b111);
+  assign when_ModemTop_l630 = (sampleValue == MARK);
   always @(posedge clk) begin
     if(!rst_n) begin
       validReg <= 1'b0;
       fsmUartRx_stateReg <= fsmUartRx_enumDef_BOOT;
     end else begin
-      if(when_ModemTop_l638) begin
+      if(when_ModemTop_l642) begin
         validReg <= 1'b0;
       end
       fsmUartRx_stateReg <= fsmUartRx_stateNext;
@@ -1700,7 +1998,7 @@ module UartRx (
         end
         fsmUartRx_enumDef_STOP : begin
           if(sampleTimer_tick) begin
-            if(when_ModemTop_l626) begin
+            if(when_ModemTop_l630) begin
               validReg <= 1'b1;
             end
           end
@@ -1737,14 +2035,14 @@ module UartRx (
       fsmUartRx_enumDef_DISC : begin
       end
       fsmUartRx_enumDef_IDLE : begin
-        if(when_ModemTop_l595) begin
+        if(when_ModemTop_l599) begin
           sampleTimer_counter <= 3'b010;
         end
       end
       fsmUartRx_enumDef_START : begin
         if(sampleTimer_tick) begin
           if(!io_valid) begin
-            if(when_ModemTop_l606) begin
+            if(when_ModemTop_l610) begin
               bitId <= 3'b000;
             end
           end
@@ -1753,7 +2051,7 @@ module UartRx (
       fsmUartRx_enumDef_DATA : begin
         if(sampleTimer_tick) begin
           payloadReg[bitId] <= sampleValue;
-          if(!when_ModemTop_l617) begin
+          if(!when_ModemTop_l621) begin
             bitId <= (bitId + 3'b001);
           end
         end
@@ -1791,7 +2089,7 @@ module UartTx (
   wire                fsmUartTx_wantKill;
   reg        [2:0]    fsmUartTx_stateReg;
   reg        [2:0]    fsmUartTx_stateNext;
-  wire                when_ModemTop_l516;
+  wire                when_ModemTop_l520;
   `ifndef SYNTHESIS
   reg [39:0] fsmUartTx_stateReg_string;
   reg [39:0] fsmUartTx_stateNext_string;
@@ -1832,7 +2130,7 @@ module UartTx (
       end
       fsmUartTx_enumDef_DATA : begin
         if(io_txClockStb) begin
-          if(when_ModemTop_l516) begin
+          if(when_ModemTop_l520) begin
             io_ready = 1'b1;
           end
         end
@@ -1898,7 +2196,7 @@ module UartTx (
       end
       fsmUartTx_enumDef_DATA : begin
         if(io_txClockStb) begin
-          if(when_ModemTop_l516) begin
+          if(when_ModemTop_l520) begin
             fsmUartTx_stateNext = fsmUartTx_enumDef_STOP;
           end
         end
@@ -1923,7 +2221,7 @@ module UartTx (
     end
   end
 
-  assign when_ModemTop_l516 = (bitId == 3'b111);
+  assign when_ModemTop_l520 = (bitId == 3'b111);
   always @(posedge clk) begin
     if(!rst_n) begin
       fsmUartTx_stateReg <= fsmUartTx_enumDef_BOOT;
@@ -1943,7 +2241,7 @@ module UartTx (
       end
       fsmUartTx_enumDef_DATA : begin
         if(io_txClockStb) begin
-          if(!when_ModemTop_l516) begin
+          if(!when_ModemTop_l520) begin
             bitId <= (bitId + 3'b001);
           end
         end
@@ -1980,7 +2278,7 @@ module UartFifo (
   reg        [1:0]    nextOut;
   reg        [1:0]    nextIn;
   reg        [2:0]    count;
-  wire                when_ModemTop_l445;
+  wire                when_ModemTop_l449;
   wire       [3:0]    _zz_1;
 
   always @(*) begin
@@ -1992,7 +2290,7 @@ module UartFifo (
     endcase
   end
 
-  assign when_ModemTop_l445 = (io_dataInEn && io_dataOutEn);
+  assign when_ModemTop_l449 = (io_dataInEn && io_dataOutEn);
   assign _zz_1 = ({3'd0,1'b1} <<< nextIn);
   assign io_dataOut = _zz_io_dataOut;
   assign io_full = (count == 3'b100);
@@ -2006,7 +2304,7 @@ module UartFifo (
       nextIn <= 2'b00;
       count <= 3'b000;
     end else begin
-      if(!when_ModemTop_l445) begin
+      if(!when_ModemTop_l449) begin
         if(io_dataInEn) begin
           count <= (count + 3'b001);
         end else begin
@@ -2138,6 +2436,81 @@ module Scrambler (
         vec_14 <= vec_13;
         vec_15 <= vec_14;
         vec_16 <= vec_15;
+      end
+    end
+  end
+
+
+endmodule
+
+module CRC16_CCITT (
+  input      [0:0]    io_data,
+  input               io_enable,
+  input               io_init,
+  output     [15:0]   io_crc,
+  output              io_crcError,
+  input               clk,
+  input               rst_n
+);
+
+  wire       [15:0]   _zz_INITIAL_VALUE;
+  wire       [15:0]   _zz_VERIFY_VALUE;
+  wire       [0:0]    _zz_crc;
+  wire       [4:0]    _zz_crc_1;
+  wire       [15:0]   INITIAL_VALUE;
+  wire       [15:0]   VERIFY_VALUE;
+  wire                crcNext_0;
+  wire                crcNext_1;
+  wire                crcNext_2;
+  wire                crcNext_3;
+  wire                crcNext_4;
+  wire                crcNext_5;
+  wire                crcNext_6;
+  wire                crcNext_7;
+  wire                crcNext_8;
+  wire                crcNext_9;
+  wire                crcNext_10;
+  wire                crcNext_11;
+  wire                crcNext_12;
+  wire                crcNext_13;
+  wire                crcNext_14;
+  wire                crcNext_15;
+  reg        [15:0]   crc;
+
+  assign _zz_INITIAL_VALUE = 16'hffff;
+  assign _zz_VERIFY_VALUE = 16'he5cc;
+  assign _zz_crc = crcNext_5;
+  assign _zz_crc_1 = {crcNext_4,{crcNext_3,{crcNext_2,{crcNext_1,crcNext_0}}}};
+  assign INITIAL_VALUE = _zz_INITIAL_VALUE;
+  assign VERIFY_VALUE = _zz_VERIFY_VALUE;
+  assign crcNext_0 = (crc[15] ^ io_data[0]);
+  assign crcNext_1 = crc[0];
+  assign crcNext_2 = crc[1];
+  assign crcNext_3 = crc[2];
+  assign crcNext_4 = crc[3];
+  assign crcNext_5 = ((crc[4] ^ crc[15]) ^ io_data[0]);
+  assign crcNext_6 = crc[5];
+  assign crcNext_7 = crc[6];
+  assign crcNext_8 = crc[7];
+  assign crcNext_9 = crc[8];
+  assign crcNext_10 = crc[9];
+  assign crcNext_11 = crc[10];
+  assign crcNext_12 = ((crc[11] ^ crc[15]) ^ io_data[0]);
+  assign crcNext_13 = crc[12];
+  assign crcNext_14 = crc[13];
+  assign crcNext_15 = crc[14];
+  assign io_crc = crc;
+  assign io_crcError = (crc != VERIFY_VALUE);
+  always @(posedge clk) begin
+    if(!rst_n) begin
+      crc <= INITIAL_VALUE;
+    end else begin
+      if(io_init) begin
+        crc <= INITIAL_VALUE;
+      end else begin
+        if(io_enable) begin
+          crc <= {crcNext_15,{crcNext_14,{crcNext_13,{crcNext_12,{crcNext_11,{crcNext_10,{crcNext_9,{crcNext_8,{crcNext_7,{crcNext_6,{_zz_crc,_zz_crc_1}}}}}}}}}}};
+        end
       end
     end
   end
