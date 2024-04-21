@@ -19,20 +19,23 @@ of full-duplex operation.  This includes a scrambler/descrambler, receiver
 PLL clock recovery, zero crossing detector, PLL lock indicator for DCD,
 transmit audio anti-alising filter.
 
-On the HDLC side it includes full-duplex hardware to handle NRZI encoding,
-synchronous bit-stuffing and synchronize sequence detection, CRC16 CCITT FCS
-generator and validator.
+On the HDLC side it includes full-duplex hardware with NRZI encoding,
+synchronous bit-stuffing and synchronize/abort sequence detection, CRC16 CCITT
+FCS generator and validation.  Data underrun on transmit (with automatic
+abort sequence generation) and data overrun on receive (when UART was full).
 
-On the UART side it includes full-duplex hardware with a small FIFO that
-acts more like a cut-through modem (not a store-and-forward) as is usually
-found with Amatur radio TNC hardware.  The serial framing protocol is a
-modified KISS protocol which itself is based on SLIP protocol used with
-early kilobit serial Internet point-to-point links.  The modification
-mainly handles the cut-through nature and also exposes the original FCS so
-it is possible for the host to optionally validate (across the UART link)
-data corruption on that part.  A frame abort sequence was added which is an
-illegal KISS sequence of FESC FESC to account for CRC errors allowing the
-host to discard the received data.
+On the UART side it includes full-duplex hardware with a small FIFO (rx=4
+bytes, tx=8 bytes) that acts more like a cut-through modem (not a
+store-and-forward) as is usually found with Amateur radio TNC hardware.
+The serial framing protocol is a modified KISS protocol which itself is
+based on SLIP protocol used with early kilobit serial Internet point-to-point
+links.  The modification mainly handles the cut-through nature and also
+exposes the original FCS so it is possible for the host to optionally
+validate (across the UART link) data corruption on that part (this is an
+unusual feature in the scene but is easier to implement and results in a
+better solution).  A frame abort sequence was added which is an illegal
+KISS sequence of FESC FESC to account for CRC errors allowing the host
+to discard the received data.
 
 The UART is pretty fixed in configuration 8N1 (as is usual for TNC) with
 the two data rate options x2 or x1 the speed of the modem.  The x2 is
@@ -64,6 +67,20 @@ ZERO or ONE and monitor the receiver and count the data rate distance before
 a transition was seen.  This feature is included in this design the BERT
 mode is a reset configuration option.
 
+With the assistance of appropiate controller software, I would like the
+resulting solution to be capable of performing automatic bit-error-rate
+calculations, automatic transmit/receive calibration for point to point
+links, and automatic detection of common misconfigurations concerning the
+setup.  So additional modes of operation for this maybe added to the KISS
+command packet level to allow host control of the BERT mode entry/exit.
+Sending control packets and entry/exit of BERT mode with a receiver side
+counter for data transition count, that can be read-back over KISS seems
+like most of the solution.
+
+This is more about characteriszing any non-liner response found on the audio
+transmit or audio receive that is fed back into the ROM lookup to achieve a
+better bit-error-rate and SnR so the communication link works better in poor
+RF conditions/environments.
 
 # Tiny Tapeout Verilog Project Template
 
