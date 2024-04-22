@@ -403,22 +403,7 @@ module UartControl (
   wire                txFifo_io_eoverrun;
   wire                tx_io_ready;
   wire                tx_io_uartTxOut;
-  wire                descram_io_vecOut_0;
-  wire                descram_io_vecOut_1;
-  wire                descram_io_vecOut_2;
-  wire                descram_io_vecOut_3;
-  wire                descram_io_vecOut_4;
-  wire                descram_io_vecOut_5;
-  wire                descram_io_vecOut_6;
-  wire                descram_io_vecOut_7;
-  wire                descram_io_vecOut_8;
-  wire                descram_io_vecOut_9;
-  wire                descram_io_vecOut_10;
-  wire                descram_io_vecOut_11;
-  wire                descram_io_vecOut_12;
-  wire                descram_io_vecOut_13;
-  wire                descram_io_vecOut_14;
-  wire                descram_io_vecOut_15;
+  wire       [16:0]   descram_io_vecOut;
   wire                descram_io_dataOut;
   wire       [7:0]    rxHdlc_io_payload;
   wire                rxHdlc_io_valid;
@@ -527,28 +512,13 @@ module UartControl (
     .rst_n         (rst_n                 )  //i
   );
   Descrambler descram (
-    .io_dataIn    (rxRawDataSource     ), //i
-    .io_en        (io_rxClockStb       ), //i
-    .io_sim       (io_sim              ), //i
-    .io_vecOut_0  (descram_io_vecOut_0 ), //o
-    .io_vecOut_1  (descram_io_vecOut_1 ), //o
-    .io_vecOut_2  (descram_io_vecOut_2 ), //o
-    .io_vecOut_3  (descram_io_vecOut_3 ), //o
-    .io_vecOut_4  (descram_io_vecOut_4 ), //o
-    .io_vecOut_5  (descram_io_vecOut_5 ), //o
-    .io_vecOut_6  (descram_io_vecOut_6 ), //o
-    .io_vecOut_7  (descram_io_vecOut_7 ), //o
-    .io_vecOut_8  (descram_io_vecOut_8 ), //o
-    .io_vecOut_9  (descram_io_vecOut_9 ), //o
-    .io_vecOut_10 (descram_io_vecOut_10), //o
-    .io_vecOut_11 (descram_io_vecOut_11), //o
-    .io_vecOut_12 (descram_io_vecOut_12), //o
-    .io_vecOut_13 (descram_io_vecOut_13), //o
-    .io_vecOut_14 (descram_io_vecOut_14), //o
-    .io_vecOut_15 (descram_io_vecOut_15), //o
-    .io_dataOut   (descram_io_dataOut  ), //o
-    .rst_n        (rst_n               ), //i
-    .clk          (clk                 )  //i
+    .io_dataIn  (rxRawDataSource        ), //i
+    .io_en      (io_rxClockStb          ), //i
+    .io_sim     (io_sim                 ), //i
+    .io_vecOut  (descram_io_vecOut[16:0]), //o
+    .io_dataOut (descram_io_dataOut     ), //o
+    .rst_n      (rst_n                  ), //i
+    .clk        (clk                    )  //i
   );
   HdlcRx rxHdlc (
     .io_payload    (rxHdlc_io_payload[7:0]   ), //o
@@ -695,30 +665,8 @@ module ModemControl (
   input               clk
 );
 
-  wire                scrambler_1_io_vecOut_0;
-  wire                scrambler_1_io_vecOut_1;
-  wire                scrambler_1_io_vecOut_2;
-  wire                scrambler_1_io_vecOut_3;
-  wire                scrambler_1_io_vecOut_4;
-  wire                scrambler_1_io_vecOut_5;
-  wire                scrambler_1_io_vecOut_6;
-  wire                scrambler_1_io_vecOut_7;
-  wire                scrambler_1_io_vecOut_8;
-  wire                scrambler_1_io_vecOut_9;
-  wire                scrambler_1_io_vecOut_10;
-  wire                scrambler_1_io_vecOut_11;
-  wire                scrambler_1_io_vecOut_12;
-  wire                scrambler_1_io_vecOut_13;
-  wire                scrambler_1_io_vecOut_14;
-  wire                scrambler_1_io_vecOut_15;
-  wire                scrambler_1_io_vecOut_16;
+  wire       [16:0]   scrambler_1_io_vecOut;
   wire                scrambler_1_io_dataOut;
-  wire       [16:0]   _zz_txAddr12;
-  wire       [0:0]    _zz_txAddr12_1;
-  wire       [5:0]    _zz_txAddr12_2;
-  wire       [16:0]   _zz_txAddr12_3;
-  wire       [0:0]    _zz_txAddr12_4;
-  wire       [4:0]    _zz_txAddr12_5;
   wire       [7:0]    _zz_rxClockInternal;
   reg        [5:0]    tablePhase;
   wire                when_ModemTop_l1317;
@@ -775,37 +723,15 @@ module ModemControl (
   wire                rxClockInternal;
   wire                when_ModemTop_l1488;
 
-  assign _zz_txAddr12 = {scrambler_1_io_vecOut_16,{scrambler_1_io_vecOut_15,{scrambler_1_io_vecOut_14,{scrambler_1_io_vecOut_13,{scrambler_1_io_vecOut_12,{scrambler_1_io_vecOut_11,{scrambler_1_io_vecOut_10,{scrambler_1_io_vecOut_9,{scrambler_1_io_vecOut_8,{scrambler_1_io_vecOut_7,{_zz_txAddr12_1,_zz_txAddr12_2}}}}}}}}}}};
-  assign _zz_txAddr12_3 = {scrambler_1_io_vecOut_16,{scrambler_1_io_vecOut_15,{scrambler_1_io_vecOut_14,{scrambler_1_io_vecOut_13,{scrambler_1_io_vecOut_12,{scrambler_1_io_vecOut_11,{scrambler_1_io_vecOut_10,{scrambler_1_io_vecOut_9,{scrambler_1_io_vecOut_8,{scrambler_1_io_vecOut_7,{scrambler_1_io_vecOut_6,{_zz_txAddr12_4,_zz_txAddr12_5}}}}}}}}}}}};
   assign _zz_rxClockInternal = {zeroCrossDet_7,{zeroCrossDet_6,{zeroCrossDet_5,{zeroCrossDet_4,{zeroCrossDet_3,{zeroCrossDet_2,{zeroCrossDet_1,zeroCrossDet_0}}}}}}};
-  assign _zz_txAddr12_1 = scrambler_1_io_vecOut_6;
-  assign _zz_txAddr12_2 = {scrambler_1_io_vecOut_5,{scrambler_1_io_vecOut_4,{scrambler_1_io_vecOut_3,{scrambler_1_io_vecOut_2,{scrambler_1_io_vecOut_1,scrambler_1_io_vecOut_0}}}}};
-  assign _zz_txAddr12_4 = scrambler_1_io_vecOut_5;
-  assign _zz_txAddr12_5 = {scrambler_1_io_vecOut_4,{scrambler_1_io_vecOut_3,{scrambler_1_io_vecOut_2,{scrambler_1_io_vecOut_1,scrambler_1_io_vecOut_0}}}};
   Scrambler scrambler_1 (
-    .io_dataIn    (txDataAfterReg          ), //i
-    .io_en        (txClockInternalFallStb  ), //i
-    .io_sim       (io_sim                  ), //i
-    .io_vecOut_0  (scrambler_1_io_vecOut_0 ), //o
-    .io_vecOut_1  (scrambler_1_io_vecOut_1 ), //o
-    .io_vecOut_2  (scrambler_1_io_vecOut_2 ), //o
-    .io_vecOut_3  (scrambler_1_io_vecOut_3 ), //o
-    .io_vecOut_4  (scrambler_1_io_vecOut_4 ), //o
-    .io_vecOut_5  (scrambler_1_io_vecOut_5 ), //o
-    .io_vecOut_6  (scrambler_1_io_vecOut_6 ), //o
-    .io_vecOut_7  (scrambler_1_io_vecOut_7 ), //o
-    .io_vecOut_8  (scrambler_1_io_vecOut_8 ), //o
-    .io_vecOut_9  (scrambler_1_io_vecOut_9 ), //o
-    .io_vecOut_10 (scrambler_1_io_vecOut_10), //o
-    .io_vecOut_11 (scrambler_1_io_vecOut_11), //o
-    .io_vecOut_12 (scrambler_1_io_vecOut_12), //o
-    .io_vecOut_13 (scrambler_1_io_vecOut_13), //o
-    .io_vecOut_14 (scrambler_1_io_vecOut_14), //o
-    .io_vecOut_15 (scrambler_1_io_vecOut_15), //o
-    .io_vecOut_16 (scrambler_1_io_vecOut_16), //o
-    .io_dataOut   (scrambler_1_io_dataOut  ), //o
-    .rst_n        (rst_n                   ), //i
-    .clk          (clk                     )  //i
+    .io_dataIn  (txDataAfterReg             ), //i
+    .io_en      (txClockInternalFallStb     ), //i
+    .io_sim     (io_sim                     ), //i
+    .io_vecOut  (scrambler_1_io_vecOut[16:0]), //o
+    .io_dataOut (scrambler_1_io_dataOut     ), //o
+    .rst_n      (rst_n                      ), //i
+    .clk        (clk                        )  //i
   );
   assign when_ModemTop_l1317 = (! rst_n);
   assign rxClockFixed = tablePhase[1];
@@ -854,8 +780,8 @@ module ModemControl (
   assign txClockInternalFallStb = ((! _zz_txClockInternalFallStb) && _zz_txClockInternalFallStb_regNext);
   always @(*) begin
     txAddr12[1 : 0] = rxCtr[3 : 2];
-    txAddr12[9 : 2] = _zz_txAddr12[7 : 0];
-    txAddr12[11 : 10] = _zz_txAddr12_3[1 : 0];
+    txAddr12[9 : 2] = scrambler_1_io_vecOut[7 : 0];
+    txAddr12[11 : 10] = scrambler_1_io_vecOut[1 : 0];
   end
 
   assign switch_Misc_l226 = tablePhase[1 : 0];
@@ -1389,72 +1315,42 @@ module Descrambler (
   input               io_dataIn,
   input               io_en,
   input               io_sim,
-  output              io_vecOut_0,
-  output              io_vecOut_1,
-  output              io_vecOut_2,
-  output              io_vecOut_3,
-  output              io_vecOut_4,
-  output              io_vecOut_5,
-  output              io_vecOut_6,
-  output              io_vecOut_7,
-  output              io_vecOut_8,
-  output              io_vecOut_9,
-  output              io_vecOut_10,
-  output              io_vecOut_11,
-  output              io_vecOut_12,
-  output              io_vecOut_13,
-  output              io_vecOut_14,
-  output              io_vecOut_15,
+  output     [16:0]   io_vecOut,
   output              io_dataOut,
   input               rst_n,
   input               clk
 );
 
-  reg                 vec_0;
-  reg                 vec_1;
-  reg                 vec_2;
-  reg                 vec_3;
-  reg                 vec_4;
-  reg                 vec_5;
-  reg                 vec_6;
-  reg                 vec_7;
-  reg                 vec_8;
-  reg                 vec_9;
-  reg                 vec_10;
-  reg                 vec_11;
-  reg                 vec_12;
-  reg                 vec_13;
-  reg                 vec_14;
-  reg                 vec_15;
-  reg                 vec_16;
+  reg        [16:0]   vec;
   wire                partial;
   wire                result;
   wire                when_ModemTop_l262;
 
-  assign partial = (vec_16 ^ vec_11);
+  assign partial = (vec[16] ^ vec[11]);
   assign result = (partial ^ io_dataIn);
   assign when_ModemTop_l262 = (! rst_n);
   assign io_dataOut = result;
+  assign io_vecOut = vec;
   always @(posedge clk) begin
-    vec_0 <= io_dataIn;
+    vec[0] <= io_dataIn;
     if(!when_ModemTop_l262) begin
       if(io_en) begin
-        vec_1 <= vec_0;
-        vec_2 <= vec_1;
-        vec_3 <= vec_2;
-        vec_4 <= vec_3;
-        vec_5 <= vec_4;
-        vec_6 <= vec_5;
-        vec_7 <= vec_6;
-        vec_8 <= vec_7;
-        vec_9 <= vec_8;
-        vec_10 <= vec_9;
-        vec_11 <= vec_10;
-        vec_12 <= vec_11;
-        vec_13 <= vec_12;
-        vec_14 <= vec_13;
-        vec_15 <= vec_14;
-        vec_16 <= vec_15;
+        vec[1] <= vec[0];
+        vec[2] <= vec[1];
+        vec[3] <= vec[2];
+        vec[4] <= vec[3];
+        vec[5] <= vec[4];
+        vec[6] <= vec[5];
+        vec[7] <= vec[6];
+        vec[8] <= vec[7];
+        vec[9] <= vec[8];
+        vec[10] <= vec[9];
+        vec[11] <= vec[10];
+        vec[12] <= vec[11];
+        vec[13] <= vec[12];
+        vec[14] <= vec[13];
+        vec[15] <= vec[14];
+        vec[16] <= vec[15];
       end
     end
   end
@@ -3009,23 +2905,7 @@ module Scrambler (
   input               io_dataIn,
   input               io_en,
   input               io_sim,
-  output              io_vecOut_0,
-  output              io_vecOut_1,
-  output              io_vecOut_2,
-  output              io_vecOut_3,
-  output              io_vecOut_4,
-  output              io_vecOut_5,
-  output              io_vecOut_6,
-  output              io_vecOut_7,
-  output              io_vecOut_8,
-  output              io_vecOut_9,
-  output              io_vecOut_10,
-  output              io_vecOut_11,
-  output              io_vecOut_12,
-  output              io_vecOut_13,
-  output              io_vecOut_14,
-  output              io_vecOut_15,
-  output              io_vecOut_16,
+  output     [16:0]   io_vecOut,
   output              io_dataOut,
   input               rst_n,
   input               clk
@@ -3040,23 +2920,7 @@ module Scrambler (
   assign result = (partial ^ io_dataIn);
   assign when_ModemTop_l197 = (! rst_n);
   assign io_dataOut = result;
-  assign io_vecOut_0 = vec[0];
-  assign io_vecOut_1 = vec[1];
-  assign io_vecOut_2 = vec[2];
-  assign io_vecOut_3 = vec[3];
-  assign io_vecOut_4 = vec[4];
-  assign io_vecOut_5 = vec[5];
-  assign io_vecOut_6 = vec[6];
-  assign io_vecOut_7 = vec[7];
-  assign io_vecOut_8 = vec[8];
-  assign io_vecOut_9 = vec[9];
-  assign io_vecOut_10 = vec[10];
-  assign io_vecOut_11 = vec[11];
-  assign io_vecOut_12 = vec[12];
-  assign io_vecOut_13 = vec[13];
-  assign io_vecOut_14 = vec[14];
-  assign io_vecOut_15 = vec[15];
-  assign io_vecOut_16 = vec[16];
+  assign io_vecOut = vec;
   always @(posedge clk) begin
     vec[0] <= result;
     if(when_ModemTop_l197) begin
