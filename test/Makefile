@@ -45,7 +45,7 @@ VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
 endif
 
 # Include the testbench sources:
-VERILOG_SOURCES += $(PWD)/tb.v 
+VERILOG_SOURCES += $(PWD)/tb.v
 
 ifeq ($(SIM),icarus)
 COMPILE_ARGS    += -DTIMING
