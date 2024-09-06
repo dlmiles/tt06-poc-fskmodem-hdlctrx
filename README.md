@@ -2,6 +2,21 @@
 
 # FSK Modulator/Demodulator Full-Duplex<br/>with HDLC frame transceiver<br/>with UART+FIFO
 
+TT08 Resubmission of the original intention of the TT06 submission.  The
+outline internal digital design structure exists, the TX appears to be
+generating HDLC looking frames at the output.  None of the RX is in place
+and various muxes, modes and test points have not been validated as all
+being present and routed correctly.
+
+TT06 fc1c5510a is the actual submission, due to working right upto the
+deadline I ended up with not having a viable GDS in the last few hours
+that was the most recent action.  The feature to pick an older commit-id
+to submit for fabrication was not in place so I had to delete GHA results
+to wind back to a last good GDS build, which did not contain anything useful.
+
+TODO create block diagram and logical diagram showing test points and
+muxing.
+
 This is the first phase (digital side only) of a mixed signal (analogue and
 digital) project using TinyTapeout.
 
