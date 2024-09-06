@@ -731,7 +731,7 @@ module ModemControl (
   reg        [7:0]    rxAddr8;
   wire       [11:0]   rxAddr;
   wire                rxClock;
-  wire                when_ModemTop_l1376;
+  wire                when_ModemTop_l1377;
   wire                txClockInternal;
   wire                _zz_txClockInternalRiseStb;
   reg                 _zz_txClockInternalRiseStb_regNext;
@@ -758,7 +758,7 @@ module ModemControl (
   reg                 zeroCrossDet_6;
   reg                 zeroCrossDet_7;
   wire                rxClockInternal;
-  wire                when_ModemTop_l1493;
+  wire                when_ModemTop_l1494;
 
   assign _zz_rxClockInternal = {zeroCrossDet_7,{zeroCrossDet_6,{zeroCrossDet_5,{zeroCrossDet_4,{zeroCrossDet_3,{zeroCrossDet_2,{zeroCrossDet_1,zeroCrossDet_0}}}}}}};
   Scrambler scrambler_1 (
@@ -809,7 +809,7 @@ module ModemControl (
   assign txClock3 = rxCtr[3];
   assign rxAddr = {rxAddr8,rxCtr};
   assign rxClock = rxCtr[2];
-  assign when_ModemTop_l1376 = (! rst_n);
+  assign when_ModemTop_l1377 = (! rst_n);
   assign txClockInternal = rxCtr[3];
   assign _zz_txClockInternalRiseStb = rxCtr[3];
   assign txClockInternalRiseStb = (_zz_txClockInternalRiseStb && (! _zz_txClockInternalRiseStb_regNext));
@@ -855,7 +855,7 @@ module ModemControl (
   end
 
   assign rxClockInternal = (_zz_rxClockInternal[7] ^ io_rxDataRawIn);
-  assign when_ModemTop_l1493 = (! rst_n);
+  assign when_ModemTop_l1494 = (! rst_n);
   assign io_txClockStb = txClockStb;
   assign io_rxClock = rxClock;
   assign io_upDownOut = updownSource;
@@ -872,7 +872,7 @@ module ModemControl (
     _zz__2_regNext <= _zz__2;
     _zz__3_regNext <= _zz__3;
     rxCtr <= (rxCtr + 4'b0001);
-    if(when_ModemTop_l1376) begin
+    if(when_ModemTop_l1377) begin
       rxCtr <= 4'b0000;
     end
     _zz_txClockInternalRiseStb_regNext <= _zz_txClockInternalRiseStb;
@@ -921,14 +921,21 @@ module ModemControl (
       zeroCrossDet_6 <= zeroCrossDet_5;
       zeroCrossDet_7 <= zeroCrossDet_6;
     end
-    if(when_ModemTop_l1493) begin
-      rxAddr8 <= 8'h00;
+  end
+
+  always @(posedge clk) begin
+    if(!rst_n) begin
+      rxAddr8 <= 8'h80;
     end else begin
-      if(rxClockInternal) begin
-        if(updownSource) begin
-          rxAddr8 <= (rxAddr8 + 8'h01);
-        end else begin
-          rxAddr8 <= (rxAddr8 - 8'h01);
+      if(when_ModemTop_l1494) begin
+        rxAddr8 <= 8'h00;
+      end else begin
+        if(rxClockInternal) begin
+          if(updownSource) begin
+            rxAddr8 <= (rxAddr8 + 8'h01);
+          end else begin
+            rxAddr8 <= (rxAddr8 - 8'h01);
+          end
         end
       end
     end
