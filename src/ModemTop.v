@@ -1,4 +1,4 @@
-// Generator : SpinalHDL dev    git head : efcba5fcd17d0cfe48fa0981e8dec6e70234b294
+// Generator : SpinalHDL dev    git head : ???
 // Component : ModemTop
 
 `ifdef TIMESCALE
@@ -14,6 +14,13 @@ module ModemTop (
   output     [7:0]    uio_oe /* verilator public */ ,
   input               simulation_z /* verilator public */ ,
   input      [15:0]   latched /* verilator public */ ,
+  input               analog_rxData,
+  input               analog_rxClock,
+  input               analog_upDown,
+  input               analog_dcdHigh,
+  input               analog_dcdLow,
+  output     [7:0]    analog_rxDac8,
+  output     [7:0]    analog_txDac8,
   input               rst_n,
   input               clk
 );
@@ -53,6 +60,8 @@ module ModemTop (
   wire                cfgTableLatency;
   wire                cfgRxClockSource;
   wire       [1:0]    cfgTxBertMode;
+  wire       [2:0]    cfgRxDataSource;
+  wire       [1:0]    cfgDcdSource;
   reg        [7:0]    oe;
   wire                rxDataIn;
   wire                txDataIn;
@@ -82,6 +91,7 @@ module ModemTop (
   wire       [3:0]    _zz_dcdPopcount_8;
   wire       [3:0]    dcdPopcount;
   wire                fakeDcd;
+  reg                 dcd;
   reg                 uartRtsIn_regNext;
 
   assign _zz_cfgTxBertMode = latched[15 : 8];
@@ -114,11 +124,11 @@ module ModemTop (
   );
   UartControl uart (
     .io_sim               (sim                   ), //i
-    .io_analogRxRawDataIn (1'b0                  ), //i
-    .io_extRxRawDataIn    (1'b0                  ), //i
+    .io_analogRxRawDataIn (analog_rxData         ), //i
+    .io_extRxRawDataIn    (rxDataIn              ), //i
     .io_cfgTxData         (cfgTxData             ), //i
     .io_cfgTxBertMode     (cfgTxBertMode[1:0]    ), //i
-    .io_cfgRxDataSource   (3'b010                ), //i
+    .io_cfgRxDataSource   (cfgRxDataSource[2:0]  ), //i
     .io_txDataIn          (txDataIn              ), //i
     .io_isSending         (uart_io_isSending     ), //o
     .io_txData            (uart_io_txData        ), //o
@@ -186,7 +196,7 @@ module ModemTop (
     uo_out = 8'bxxxxxxxx;
     uo_out[0] = uart_io_uartTxOut;
     uo_out[1] = uart_io_uartCtsOut;
-    uo_out[2] = fakeDcd;
+    uo_out[2] = dcd;
     uo_out[3] = layer_io_rxerror;
     uo_out[4] = layer_io_txerror;
     uo_out[5] = uart_io_isSending;
@@ -211,6 +221,8 @@ module ModemTop (
   assign cfgTableLatency = latched[12];
   assign cfgRxClockSource = latched[13];
   assign cfgTxBertMode = _zz_cfgTxBertMode[7 : 6];
+  assign cfgRxDataSource = 3'b110;
+  assign cfgDcdSource = 2'b10;
   always @(*) begin
     oe[0] = cfgRxClockDirection;
     oe[1] = cfgUpDownSource;
@@ -244,7 +256,26 @@ module ModemTop (
   assign _zz_dcdPopcount_8 = 4'b0011;
   assign dcdPopcount = (_zz_dcdPopcount_9 + _zz_dcdPopcount_14);
   assign fakeDcd = ((4'b0011 <= dcdPopcount) && (dcdPopcount <= 4'b0101));
+  always @(*) begin
+    case(cfgDcdSource)
+      2'b00 : begin
+        dcd = analog_dcdLow;
+      end
+      2'b01 : begin
+        dcd = analog_dcdHigh;
+      end
+      2'b10 : begin
+        dcd = fakeDcd;
+      end
+      default : begin
+        dcd = (! fakeDcd);
+      end
+    endcase
+  end
+
   assign layer_io_resetCondx = (uartRtsIn && (! uartRtsIn_regNext));
+  assign analog_rxDac8 = control_io_rxDac8;
+  assign analog_txDac8 = control_io_txDac8;
   always @(posedge clk) begin
     if(!rst_n) begin
       dcdHistory_1 <= 1'b0;
@@ -301,7 +332,7 @@ module LayerControl (
 
   reg                 txErrorReg;
   reg                 rxErrorReg;
-  wire                when_ModemTop_l1247;
+  wire                when_ModemTop_l1251;
 
   always @(*) begin
     io_txerror = txErrorReg;
@@ -315,14 +346,14 @@ module LayerControl (
   always @(*) begin
     io_rxerror = rxErrorReg;
     if(!io_resetCondx) begin
-      if(when_ModemTop_l1247) begin
+      if(when_ModemTop_l1251) begin
         io_rxerror = 1'b1;
       end
     end
   end
 
   assign io_sending = io_hdlcTxActive;
-  assign when_ModemTop_l1247 = (io_hdlcFrameError || io_hdlcCrcError);
+  assign when_ModemTop_l1251 = (io_hdlcFrameError || io_hdlcCrcError);
   always @(posedge clk) begin
     if(!rst_n) begin
       txErrorReg <= 1'b0;
@@ -335,7 +366,7 @@ module LayerControl (
         if(io_hdlcUnderrun) begin
           txErrorReg <= 1'b1;
         end
-        if(when_ModemTop_l1247) begin
+        if(when_ModemTop_l1251) begin
           rxErrorReg <= 1'b1;
         end
       end
@@ -420,9 +451,9 @@ module UartControl (
   reg                 uart_txCommandDecoder_io_wantTx_regNext;
   wire       [1:0]    switch_Misc_l226;
   reg                 rxRawDataSource;
-  wire       [0:0]    switch_Misc_l226_1;
+  wire       [1:0]    switch_Misc_l226_1;
   reg                 rxDataSource;
-  wire                when_ModemTop_l1164;
+  wire                when_ModemTop_l1168;
   reg                 txDataSource;
   reg                 txData;
 
@@ -574,33 +605,39 @@ module UartControl (
     endcase
   end
 
-  assign switch_Misc_l226_1 = io_cfgRxDataSource[2];
+  assign switch_Misc_l226_1 = io_cfgRxDataSource[2 : 1];
   always @(*) begin
     case(switch_Misc_l226_1)
-      1'b0 : begin
+      2'b00 : begin
+        rxDataSource = descram_io_dataOut;
+      end
+      2'b10 : begin
+        rxDataSource = io_extRxRawDataIn;
+      end
+      2'b01 : begin
         rxDataSource = descram_io_dataOut;
       end
       default : begin
-        rxDataSource = io_extRxRawDataIn;
+        rxDataSource = txHdlc_io_txDataOut;
       end
     endcase
   end
 
   always @(*) begin
     rxHdlc_io_ready = 1'b0;
-    if(when_ModemTop_l1164) begin
+    if(when_ModemTop_l1168) begin
       rxHdlc_io_ready = 1'b1;
     end
   end
 
   always @(*) begin
     txFifo_io_dataInEn = 1'b0;
-    if(when_ModemTop_l1164) begin
+    if(when_ModemTop_l1168) begin
       txFifo_io_dataInEn = rxHdlc_io_valid;
     end
   end
 
-  assign when_ModemTop_l1164 = (rxHdlc_io_valid && (! txFifo_io_full));
+  assign when_ModemTop_l1168 = (rxHdlc_io_valid && (! txFifo_io_full));
   assign rxHdlc_io_bertReset = (! rst_n);
   always @(*) begin
     case(io_cfgTxData)
@@ -669,7 +706,7 @@ module ModemControl (
   wire                scrambler_1_io_dataOut;
   wire       [7:0]    _zz_rxClockInternal;
   reg        [5:0]    tablePhase;
-  wire                when_ModemTop_l1317;
+  wire                when_ModemTop_l1322;
   wire                rxClockFixed;
   wire                _zz_rxClockFixedStb;
   reg                 _zz_rxClockFixedStb_regNext;
@@ -694,7 +731,7 @@ module ModemControl (
   reg        [7:0]    rxAddr8;
   wire       [11:0]   rxAddr;
   wire                rxClock;
-  wire                when_ModemTop_l1371;
+  wire                when_ModemTop_l1376;
   wire                txClockInternal;
   wire                _zz_txClockInternalRiseStb;
   reg                 _zz_txClockInternalRiseStb_regNext;
@@ -721,7 +758,7 @@ module ModemControl (
   reg                 zeroCrossDet_6;
   reg                 zeroCrossDet_7;
   wire                rxClockInternal;
-  wire                when_ModemTop_l1488;
+  wire                when_ModemTop_l1493;
 
   assign _zz_rxClockInternal = {zeroCrossDet_7,{zeroCrossDet_6,{zeroCrossDet_5,{zeroCrossDet_4,{zeroCrossDet_3,{zeroCrossDet_2,{zeroCrossDet_1,zeroCrossDet_0}}}}}}};
   Scrambler scrambler_1 (
@@ -733,7 +770,7 @@ module ModemControl (
     .rst_n      (rst_n                      ), //i
     .clk        (clk                        )  //i
   );
-  assign when_ModemTop_l1317 = (! rst_n);
+  assign when_ModemTop_l1322 = (! rst_n);
   assign rxClockFixed = tablePhase[1];
   assign _zz_rxClockFixedStb = tablePhase[1];
   assign rxClockFixedStb = (_zz_rxClockFixedStb && (! _zz_rxClockFixedStb_regNext));
@@ -772,7 +809,7 @@ module ModemControl (
   assign txClock3 = rxCtr[3];
   assign rxAddr = {rxAddr8,rxCtr};
   assign rxClock = rxCtr[2];
-  assign when_ModemTop_l1371 = (! rst_n);
+  assign when_ModemTop_l1376 = (! rst_n);
   assign txClockInternal = rxCtr[3];
   assign _zz_txClockInternalRiseStb = rxCtr[3];
   assign txClockInternalRiseStb = (_zz_txClockInternalRiseStb && (! _zz_txClockInternalRiseStb_regNext));
@@ -818,12 +855,12 @@ module ModemControl (
   end
 
   assign rxClockInternal = (_zz_rxClockInternal[7] ^ io_rxDataRawIn);
-  assign when_ModemTop_l1488 = (! rst_n);
+  assign when_ModemTop_l1493 = (! rst_n);
   assign io_txClockStb = txClockStb;
   assign io_rxClock = rxClock;
   assign io_upDownOut = updownSource;
   always @(posedge clk) begin
-    if(when_ModemTop_l1317) begin
+    if(when_ModemTop_l1322) begin
       tablePhase <= 6'h00;
     end else begin
       tablePhase <= (tablePhase - 6'h01);
@@ -835,7 +872,7 @@ module ModemControl (
     _zz__2_regNext <= _zz__2;
     _zz__3_regNext <= _zz__3;
     rxCtr <= (rxCtr + 4'b0001);
-    if(when_ModemTop_l1371) begin
+    if(when_ModemTop_l1376) begin
       rxCtr <= 4'b0000;
     end
     _zz_txClockInternalRiseStb_regNext <= _zz_txClockInternalRiseStb;
@@ -884,7 +921,7 @@ module ModemControl (
       zeroCrossDet_6 <= zeroCrossDet_5;
       zeroCrossDet_7 <= zeroCrossDet_6;
     end
-    if(when_ModemTop_l1488) begin
+    if(when_ModemTop_l1493) begin
       rxAddr8 <= 8'h00;
     end else begin
       if(rxClockInternal) begin
